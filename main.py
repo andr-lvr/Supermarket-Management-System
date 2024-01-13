@@ -43,6 +43,7 @@ class InventoryManager:
     def __init__(self, root):
         self.root = root
         self.root.title("Supermarket Management System")
+        self.root.geometry("800x400")  # Double the width
 
         self.products = []
         self.load_products()
@@ -91,8 +92,9 @@ class InventoryManager:
 
         category_label = ttk.Label(add_product_window, text="Product Category:")
         category_label.grid(row=3, column=0, padx=10, pady=10)
-        category_entry = ttk.Entry(add_product_window)
+        category_entry = ttk.Combobox(add_product_window, values=list(set(product.category for product in self.products)))
         category_entry.grid(row=3, column=1, padx=10, pady=10)
+        category_entry.set("Select Category")
 
         add_button = ttk.Button(add_product_window, text="Add Product", command=lambda: self.add_product_command(
             name_entry.get(),
@@ -121,8 +123,9 @@ class InventoryManager:
 
         product_id_label = ttk.Label(update_product_window, text="Product ID:")
         product_id_label.grid(row=0, column=0, padx=10, pady=10)
-        product_id_entry = ttk.Entry(update_product_window)
+        product_id_entry = ttk.Combobox(update_product_window, values=[str(product.product_id) for product in self.products])
         product_id_entry.grid(row=0, column=1, padx=10, pady=10)
+        product_id_entry.set("Select Product ID")
 
         quantity_label = ttk.Label(update_product_window, text="New Quantity:")
         quantity_label.grid(row=1, column=0, padx=10, pady=10)
@@ -156,8 +159,9 @@ class InventoryManager:
 
         product_id_label = ttk.Label(sell_product_window, text="Product ID:")
         product_id_label.grid(row=0, column=0, padx=10, pady=10)
-        product_id_entry = ttk.Entry(sell_product_window)
+        product_id_entry = ttk.Combobox(sell_product_window, values=[str(product.product_id) for product in self.products])
         product_id_entry.grid(row=0, column=1, padx=10, pady=10)
+        product_id_entry.set("Select Product ID")
 
         quantity_label = ttk.Label(sell_product_window, text="Quantity to Sell:")
         quantity_label.grid(row=1, column=0, padx=10, pady=10)
