@@ -13,10 +13,12 @@ class Action(Enum):
     DISPLAY_PRODUCTS, ADD_PRODUCT, UPDATE_PRODUCT_QUANTITY, SELL_PRODUCT, VIEW_TRANSACTION_LOG, \
         SAVE_PRODUCTS_JSON, GENERATE_QUANTITY_CHART, SAVE_AND_EXIT = auto(), auto(), auto(), auto(), auto(), auto(), auto(), auto()
 
+
 class Constants:
     PRODUCTS_FILE = 'products.json'
     TRANSACTIONS_LOG_FILE = 'transactions.log'
     DATABASE_FILE = 'inventory.db'
+
 
 class Product:
     def __init__(self, product_id, name, price, quantity, category):
@@ -26,45 +28,81 @@ class Product:
         return {'product_id': self.product_id, 'name': self.name, 'price': self.price, 'quantity': self.quantity,
                 'category': self.category}
 
+
 def log_transaction(product, quantity):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with open(Constants.TRANSACTIONS_LOG_FILE, 'a') as file:
         file.write(f"{timestamp} - Sold {quantity} units of '{product.name}' for ${quantity * product.price}\n")
 
+
 def view_transaction_log():
     with open(Constants.TRANSACTIONS_LOG_FILE, 'r') as file:
         messagebox.showinfo("Transaction Log", colored("Transaction Log:", 'cyan') + "\n" + file.read())
+
+
+def create_database():
+    with sqlite3.connect(Constants.DATABASE_FILE) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS products (
+                product_id INTEGER PRIMARY KEY,
+                name TEXT,
+                price REAL,
+                quantity INTEGER,
+                category TEXT
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS transactions (
+                transaction_id INTEGER PRIMARY KEY,
+                product_id INTEGER,
+                quantity INTEGER,
+                timestamp TEXT,
+                FOREIGN KEY(product_id) REFERENCES products(product_id)
+            )
+        ''')
+
+
+def save_transactions(transactions):
+    with sqlite3.connect(Constants.DATABASE_FILE) as conn:
+        cursor = conn.cursor()
+        cursor.executemany('''
+            INSERT INTO transactions (product_id, quantity, timestamp)
+            VALUES (?, ?, ?)
+        ''', transactions)
+
+
+def sort_transactions(key):
+    with sqlite3.connect(Constants.DATABASE_FILE) as conn:
+        cursor = conn.cursor()
+        cursor.execute(f'SELECT * FROM transactions ORDER BY {key}')
+        transactions = cursor.fetchall()
+        return transactions
+
+
+def add_product_command(name, price, quantity, category, add_product_window):
+    try:
+        price, quantity = float(price), int(quantity)
+        with sqlite3.connect(Constants.DATABASE_FILE) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO products (name, price, quantity, category)
+                VALUES (?, ?, ?, ?)
+            ''', (name, price, quantity, category))
+        print(colored(f"Product '{name}' added successfully.", 'green'))
+        add_product_window.destroy()
+    except (ValueError, sqlite3.Error) as e:
+        print(colored(f"Error adding product: {e}", 'red'))
+
 
 class InventoryManager:
     def __init__(self, root):
         self.root, self.products = root, []
         self.root.title("Supermarket Management System")
         self.root.geometry("300x600")
-        self.create_database()
+        create_database()
         self.load_products()
         self.create_gui()
-
-    def create_database(self):
-        with sqlite3.connect(Constants.DATABASE_FILE) as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS products (
-                    product_id INTEGER PRIMARY KEY,
-                    name TEXT,
-                    price REAL,
-                    quantity INTEGER,
-                    category TEXT
-                )
-            ''')
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS transactions (
-                    transaction_id INTEGER PRIMARY KEY,
-                    product_id INTEGER,
-                    quantity INTEGER,
-                    timestamp TEXT,
-                    FOREIGN KEY(product_id) REFERENCES products(product_id)
-                )
-            ''')
 
     def load_products(self):
         try:
@@ -87,27 +125,13 @@ class InventoryManager:
             ''', [(p.product_id, p.name, p.price, p.quantity, p.category) for p in self.products])
         print("Data saved in the database.")
 
-    def save_transactions(self, transactions):
-        with sqlite3.connect(Constants.DATABASE_FILE) as conn:
-            cursor = conn.cursor()
-            cursor.executemany('''
-                INSERT INTO transactions (product_id, quantity, timestamp)
-                VALUES (?, ?, ?)
-            ''', transactions)
-
-    def sort_transactions(self, key):
-        with sqlite3.connect(Constants.DATABASE_FILE) as conn:
-            cursor = conn.cursor()
-            cursor.execute(f'SELECT * FROM transactions ORDER BY {key}')
-            transactions = cursor.fetchall()
-            return transactions
-
     def sort_products(self, key):
         self.products.sort(key=lambda p: getattr(p, key))
         self.display_products()
 
-    def display_sorted_transactions(self, key):
-        transactions = self.sort_transactions(key)
+    @staticmethod
+    def display_sorted_transactions(key):
+        transactions = sort_transactions(key)
         headers = ["Transaction ID", "Product ID", "Quantity", "Timestamp"]
         data = [(t[0], t[1], t[2], t[3]) for t in transactions]
         table = tabulate.tabulate(data, headers=headers, tablefmt="fancy_grid")
@@ -122,21 +146,7 @@ class InventoryManager:
     def add_product(self):
         self.create_input_window("Add Product",
                                  ["Product Name:", "Product Price:", "Product Quantity:",
-                                  "Product Category:"], self.add_product_command)
-
-    def add_product_command(self, name, price, quantity, category, add_product_window):
-        try:
-            price, quantity = float(price), int(quantity)
-            with sqlite3.connect(Constants.DATABASE_FILE) as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    INSERT INTO products (name, price, quantity, category)
-                    VALUES (?, ?, ?, ?)
-                ''', (name, price, quantity, category))
-            print(colored(f"Product '{name}' added successfully.", 'green'))
-            add_product_window.destroy()
-        except (ValueError, sqlite3.Error) as e:
-            print(colored(f"Error adding product: {e}", 'red'))
+                                  "Product Category:"], add_product_command)
 
     def update_product_quantity(self):
         self.create_input_window("Update Product Quantity", ["Product ID:", "New Quantity:"],
@@ -228,10 +238,12 @@ class InventoryManager:
         print(colored("Data saved. Exiting.", 'green'))
         self.root.destroy()
 
+
 def main():
     root = tk.Tk()
     InventoryManager(root)
     root.mainloop()
+
 
 if __name__ == "__main__":
     main()
