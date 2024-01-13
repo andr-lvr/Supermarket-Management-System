@@ -5,5 +5,12 @@
     "price": 123.0,
     "quantity": 123,
     "category": "SD"
+  },
+  {
+    "product_id": 2,
+    "name": "sdgf",
+    "price": 234234.0,
+    "quantity": 234,
+    "category": "sgsd"
   }
 ]

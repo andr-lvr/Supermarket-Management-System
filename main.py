@@ -24,10 +24,9 @@ class Product:
 
 class InventoryManager:
     def __init__(self, root):
-        self.root = root
+        self.root, self.products = root, []
         self.root.title("Supermarket Management System")
         self.root.geometry("800x400")
-        self.products = []
         self.load_products()
         self.create_gui()
 
@@ -45,48 +44,29 @@ class InventoryManager:
         print("Data saved in JSON format.")
 
     def display_products(self):
-        headers = ["ID", "Name", "Price", "Quantity", "Category"]
-        data = [[p.product_id, p.name, p.price, p.quantity, p.category] for p in self.products]
+        headers, data = ["ID", "Name", "Price", "Quantity", "Category"], [[p.product_id, p.name, p.price, p.quantity, p.category] for p in self.products]
         table = tabulate.tabulate(data, headers=headers, tablefmt="fancy_grid")
         messagebox.showinfo("Display Products", colored(table, 'cyan'))
 
     def add_product(self):
-        add_product_window = tk.Toplevel(self.root)
-        add_product_window.title("Add Product")
-        entries = [ttk.Entry(add_product_window) for _ in range(4)]
-        labels = ["Product Name:", "Product Price:", "Product Quantity:", "Product Category:"]
-        for i, (label, entry) in enumerate(zip(labels, entries)):
-            ttk.Label(add_product_window, text=label).grid(row=i, column=0, padx=10, pady=10)
-            entry.grid(row=i, column=1, padx=10, pady=10)
-        category_entry = entries[-1]
-        category_entry['values'] = list(set(product.category for product in self.products))
-        category_entry.set("Select Category")
-        ttk.Button(add_product_window, text="Add Product", command=lambda: self.add_product_command(*[e.get() for e in entries], add_product_window)).grid(row=len(entries), column=0, columnspan=2, pady=10)
+        add_product_window = self.create_input_window("Add Product", ["Product Name:", "Product Price:", "Product Quantity:", "Product Category:"], self.add_product_command)
 
     def add_product_command(self, name, price, quantity, category, add_product_window):
         try:
             price, quantity = float(price), int(quantity)
-            product_id = len(self.products) + 1
-            self.products.append(Product(product_id, name, price, quantity, category))
+            self.products.append(Product(len(self.products) + 1, name, price, quantity, category))
             print(colored(f"Product '{name}' added successfully.", 'green'))
             add_product_window.destroy()
         except ValueError:
             print(colored("Invalid input. Please enter valid values.", 'red'))
 
     def update_product_quantity(self):
-        update_product_window = tk.Toplevel(self.root)
-        update_product_window.title("Update Product Quantity")
-        product_id_entry = ttk.Combobox(update_product_window, values=[str(p.product_id) for p in self.products])
-        quantity_entry = ttk.Entry(update_product_window)
-        for i, (label, entry) in enumerate([("Product ID:", product_id_entry), ("New Quantity:", quantity_entry)]):
-            ttk.Label(update_product_window, text=label).grid(row=i, column=0, padx=10, pady=10)
-            entry.grid(row=i, column=1, padx=10, pady=10)
-        ttk.Button(update_product_window, text="Update Quantity", command=lambda: self.update_product_quantity_command(product_id_entry.get(), quantity_entry.get(), update_product_window)).grid(row=2, column=0, columnspan=2, pady=10)
+        update_product_window = self.create_input_window("Update Product Quantity", ["Product ID:", "New Quantity:"], self.update_product_quantity_command)
 
     def update_product_quantity_command(self, product_id, new_quantity, update_product_window):
         try:
             product_id, new_quantity = int(product_id), int(new_quantity)
-            product = self.find_product_by_id(product_id)
+            product = next((p for p in self.products if p.product_id == product_id), None)
             if product:
                 product.quantity = new_quantity
                 print(colored(f"Quantity for product '{product.name}' updated to {new_quantity}.", 'yellow'))
@@ -97,19 +77,12 @@ class InventoryManager:
             print(colored("Invalid input. Please enter valid values.", 'red'))
 
     def sell_product(self):
-        sell_product_window = tk.Toplevel(self.root)
-        sell_product_window.title("Sell Product")
-        product_id_entry = ttk.Combobox(sell_product_window, values=[str(p.product_id) for p in self.products])
-        quantity_entry = ttk.Entry(sell_product_window)
-        for i, (label, entry) in enumerate([("Product ID:", product_id_entry), ("Quantity to Sell:", quantity_entry)]):
-            ttk.Label(sell_product_window, text=label).grid(row=i, column=0, padx=10, pady=10)
-            entry.grid(row=i, column=1, padx=10, pady=10)
-        ttk.Button(sell_product_window, text="Sell Product", command=lambda: self.sell_product_command(product_id_entry.get(), quantity_entry.get(), sell_product_window)).grid(row=2, column=0, columnspan=2, pady=10)
+        sell_product_window = self.create_input_window("Sell Product", ["Product ID:", "Quantity to Sell:"], self.sell_product_command)
 
     def sell_product_command(self, product_id, quantity, sell_product_window):
         try:
             product_id, quantity = int(product_id), int(quantity)
-            product = self.find_product_by_id(product_id)
+            product = next((p for p in self.products if p.product_id == product_id), None)
             if product:
                 if product.quantity >= quantity:
                     product.quantity -= quantity
@@ -122,6 +95,16 @@ class InventoryManager:
                 print(colored(f"Product with ID {product_id} not found.", 'red'))
         except ValueError:
             print(colored("Invalid input. Please enter valid values.", 'red'))
+
+    def create_input_window(self, title, labels, command):
+        input_window = tk.Toplevel(self.root)
+        input_window.title(title)
+        entries = [ttk.Entry(input_window) for _ in range(len(labels))]
+        for i, (label, entry) in enumerate(zip(labels, entries)):
+            ttk.Label(input_window, text=label).grid(row=i, column=0, padx=10, pady=10)
+            entry.grid(row=i, column=1, padx=10, pady=10)
+        ttk.Button(input_window, text=title, command=lambda: command(*[e.get() for e in entries], input_window)).grid(row=len(entries), column=0, columnspan=2, pady=10)
+        return input_window
 
     def find_product_by_id(self, product_id):
         return next((p for p in self.products if p.product_id == product_id), None)
