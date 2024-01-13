@@ -4,4 +4,4 @@
 pip install termcolor tabulate matplotlib
 
 # Run the Supermarket Management System
-python supermarket_management_system.py
+python main.py
