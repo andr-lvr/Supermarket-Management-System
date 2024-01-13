@@ -1,4 +1,3 @@
-Supermarket Management System
 Features:
 - Display Products: View a table of all products in the inventory.
 - Add Product: Add a new product to the inventory with details such as name, price, quantity, and category.
