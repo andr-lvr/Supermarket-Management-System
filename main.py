@@ -1,22 +1,22 @@
-import json
-from datetime import datetime
-import matplotlib.pyplot as plt
-import tabulate
-from termcolor import colored
-import tkinter as tk
-from tkinter import ttk, messagebox
-from enum import Enum, auto
+import json  # Library for working with JSON data
+from datetime import datetime  # Library for working with date and time
+import sqlite3  # Library for working with SQLite database
+import matplotlib.pyplot as plt  # Library for creating plots and charts
+import tabulate  # Library for creating text-based tables
+from termcolor import colored  # Library for adding colored text to console output
+import tkinter as tk  # Standard GUI library for creating desktop applications
+from tkinter import ttk, messagebox  # Additional modules from tkinter for GUI components
+from enum import Enum, auto  # Enumerations and automatic value assignment for actions
 
 
 class Action(Enum):
     DISPLAY_PRODUCTS, ADD_PRODUCT, UPDATE_PRODUCT_QUANTITY, SELL_PRODUCT, VIEW_TRANSACTION_LOG, \
         SAVE_PRODUCTS_JSON, GENERATE_QUANTITY_CHART, SAVE_AND_EXIT = auto(), auto(), auto(), auto(), auto(), auto(), auto(), auto()
 
-
 class Constants:
     PRODUCTS_FILE = 'products.json'
     TRANSACTIONS_LOG_FILE = 'transactions.log'
-
+    DATABASE_FILE = 'inventory.db'
 
 class Product:
     def __init__(self, product_id, name, price, quantity, category):
@@ -26,42 +26,96 @@ class Product:
         return {'product_id': self.product_id, 'name': self.name, 'price': self.price, 'quantity': self.quantity,
                 'category': self.category}
 
-
 def log_transaction(product, quantity):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with open(Constants.TRANSACTIONS_LOG_FILE, 'a') as file:
         file.write(f"{timestamp} - Sold {quantity} units of '{product.name}' for ${quantity * product.price}\n")
 
-
 def view_transaction_log():
     with open(Constants.TRANSACTIONS_LOG_FILE, 'r') as file:
         messagebox.showinfo("Transaction Log", colored("Transaction Log:", 'cyan') + "\n" + file.read())
-
 
 class InventoryManager:
     def __init__(self, root):
         self.root, self.products = root, []
         self.root.title("Supermarket Management System")
-        self.root.geometry("300x400")
+        self.root.geometry("300x600")
+        self.create_database()
         self.load_products()
         self.create_gui()
 
+    def create_database(self):
+        with sqlite3.connect(Constants.DATABASE_FILE) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS products (
+                    product_id INTEGER PRIMARY KEY,
+                    name TEXT,
+                    price REAL,
+                    quantity INTEGER,
+                    category TEXT
+                )
+            ''')
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS transactions (
+                    transaction_id INTEGER PRIMARY KEY,
+                    product_id INTEGER,
+                    quantity INTEGER,
+                    timestamp TEXT,
+                    FOREIGN KEY(product_id) REFERENCES products(product_id)
+                )
+            ''')
+
     def load_products(self):
         try:
-            with open(Constants.PRODUCTS_FILE, 'r') as file:
-                self.products = [Product(**data) for data in json.load(file)]
-            print("Data loaded from JSON.")
-        except FileNotFoundError:
-            print("No existing JSON data. Starting with an empty inventory.")
+            with sqlite3.connect(Constants.DATABASE_FILE) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT * FROM products')
+                data = cursor.fetchall()
+                self.products = [Product(*row) for row in data]
+            print("Data loaded from the database.")
+        except sqlite3.Error:
+            print("Error loading data from the database. Starting with an empty inventory.")
 
     def save_products(self):
-        with open(Constants.PRODUCTS_FILE, 'w') as file:
-            json.dump([product.to_dict() for product in self.products], file, indent=2)
-        print("Data saved in JSON format.")
+        with sqlite3.connect(Constants.DATABASE_FILE) as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM products')
+            cursor.executemany('''
+                INSERT INTO products (product_id, name, price, quantity, category)
+                VALUES (?, ?, ?, ?, ?)
+            ''', [(p.product_id, p.name, p.price, p.quantity, p.category) for p in self.products])
+        print("Data saved in the database.")
+
+    def save_transactions(self, transactions):
+        with sqlite3.connect(Constants.DATABASE_FILE) as conn:
+            cursor = conn.cursor()
+            cursor.executemany('''
+                INSERT INTO transactions (product_id, quantity, timestamp)
+                VALUES (?, ?, ?)
+            ''', transactions)
+
+    def sort_transactions(self, key):
+        with sqlite3.connect(Constants.DATABASE_FILE) as conn:
+            cursor = conn.cursor()
+            cursor.execute(f'SELECT * FROM transactions ORDER BY {key}')
+            transactions = cursor.fetchall()
+            return transactions
+
+    def sort_products(self, key):
+        self.products.sort(key=lambda p: getattr(p, key))
+        self.display_products()
+
+    def display_sorted_transactions(self, key):
+        transactions = self.sort_transactions(key)
+        headers = ["Transaction ID", "Product ID", "Quantity", "Timestamp"]
+        data = [(t[0], t[1], t[2], t[3]) for t in transactions]
+        table = tabulate.tabulate(data, headers=headers, tablefmt="fancy_grid")
+        messagebox.showinfo("Sorted Transactions", colored(table, 'cyan'))
 
     def display_products(self):
-        headers, data = ["ID", "Name", "Price", "Quantity", "Category"], [
-            [p.product_id, p.name, p.price, p.quantity, p.category] for p in self.products]
+        headers = ["ID", "Name", "Price", "Quantity", "Category"]
+        data = [[p.product_id, p.name, p.price, p.quantity, p.category] for p in self.products]
         table = tabulate.tabulate(data, headers=headers, tablefmt="fancy_grid")
         messagebox.showinfo("Display Products", colored(table, 'cyan'))
 
@@ -73,11 +127,16 @@ class InventoryManager:
     def add_product_command(self, name, price, quantity, category, add_product_window):
         try:
             price, quantity = float(price), int(quantity)
-            self.products.append(Product(len(self.products) + 1, name, price, quantity, category))
+            with sqlite3.connect(Constants.DATABASE_FILE) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT INTO products (name, price, quantity, category)
+                    VALUES (?, ?, ?, ?)
+                ''', (name, price, quantity, category))
             print(colored(f"Product '{name}' added successfully.", 'green'))
             add_product_window.destroy()
-        except ValueError:
-            print(colored("Invalid input. Please enter valid values.", 'red'))
+        except (ValueError, sqlite3.Error) as e:
+            print(colored(f"Error adding product: {e}", 'red'))
 
     def update_product_quantity(self):
         self.create_input_window("Update Product Quantity", ["Product ID:", "New Quantity:"],
@@ -155,7 +214,11 @@ class InventoryManager:
             ("View Transaction Log", view_transaction_log),
             ("Save Products (JSON)", self.save_products),
             ("Generate Quantity Chart", self.generate_quantity_chart),
-            ("Save and Exit", self.save_and_exit)
+            ("Save and Exit", self.save_and_exit),
+            ("Sort Transactions (By Timestamp)", lambda: self.display_sorted_transactions('timestamp')),
+            ("Sort Transactions (By Quantity)", lambda: self.display_sorted_transactions('quantity')),
+            ("Sort Products (By Name)", lambda: self.sort_products('name')),
+            ("Sort Products (By Price)", lambda: self.sort_products('price')),
         ]
         for text, command in buttons:
             ttk.Button(self.root, text=text, command=command).pack(pady=10)
@@ -165,12 +228,10 @@ class InventoryManager:
         print(colored("Data saved. Exiting.", 'green'))
         self.root.destroy()
 
-
 def main():
     root = tk.Tk()
     InventoryManager(root)
     root.mainloop()
-
 
 if __name__ == "__main__":
     main()
