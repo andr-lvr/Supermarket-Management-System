@@ -42,7 +42,7 @@ class InventoryManager:
     def __init__(self, root):
         self.root, self.products = root, []
         self.root.title("Supermarket Management System")
-        self.root.geometry("800x400")
+        self.root.geometry("300x400")
         self.load_products()
         self.create_gui()
 
