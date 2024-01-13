@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
-import matplotlib.pyplot as plt
 import tabulate
+import matplotlib.pyplot as plt
 from termcolor import colored
 from enum import Enum, auto
 import tkinter as tk
